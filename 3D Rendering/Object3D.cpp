@@ -1,51 +1,46 @@
 #include "Object3D.h"
+#include <cmath> // Include cmath for mathematical functions
 
-Object3D::Object3D() {
-    circleCorner = 4;
+Object3D::Object3D() : circleCorner(4) {
+    // Constructor initializes circleCorner to 4
 }
 
 void Object3D::GetCorner() {
-    if (!vertices.empty()) {
-        vertices.clear();
+    // Clear the vertices and indices vectors
+    vertices.clear();
+    indices.clear();
+
+    // Constants for the circle calculation
+    const int cornerTotal = circleCorner;
+    const float radius = 0.5f;
+    const float angleIncrement = 2.0f * static_cast<float>(M_PI) / cornerTotal;
+
+    // Reserve space to improve performance by minimizing reallocations
+    vertices.reserve((cornerTotal + 1) * 3); // center vertex + corner vertices
+    indices.reserve(cornerTotal * 3);        // number of triangles * 3 indices per triangle
+
+    // Add center vertex at (0, 0, 0)
+    vertices.push_back(0.0f);
+    vertices.push_back(0.0f);
+    vertices.push_back(0.0f);
+
+    // Generate vertices around the circle
+    for (int i = 0; i < cornerTotal; ++i) {
+        float angle = i * angleIncrement;
+        float x = radius * cosf(angle);
+        float y = radius * sinf(angle);
+
+        vertices.push_back(x);
+        vertices.push_back(y);
+        vertices.push_back(0.0f); // z-coordinate
     }
 
-    if (!indices.empty()) {
-        indices.clear();
-    }
+    // Generate indices for triangle fan
+    for (int i = 1; i <= cornerTotal; ++i) {
+        indices.push_back(0); // Center vertex index
+        indices.push_back(i); // Current vertex index
 
-    int cornerTotal = circleCorner;
-
-    vertices.push_back(0);
-    vertices.push_back(0);
-    vertices.push_back(0);
-
-    double defaultAngle = 360.0 / cornerTotal;
-
-    for (int i = 0; i < cornerTotal * 3; i += 3)
-    {
-        int index = i + 3;
-
-        double deg = i / 3 * defaultAngle;
-        double rad = deg * M_PI / 180.0;
-
-        vertices.push_back(0.5 * cos(rad));
-        vertices.push_back(0.5 * sin(rad));
-        vertices.push_back(0);
-    }
-
-    int tempIndex = 1;
-
-    for (int i = 0; i < cornerTotal * 3; i += 3) {
-        indices.push_back(0);
-        indices.push_back(tempIndex);
-
-        if (i == (cornerTotal - 1) * 3) {
-            indices.push_back(1);
-        }
-        else {
-            indices.push_back(tempIndex + 1);
-        }
-
-        tempIndex++;
+        int nextIndex = (i % cornerTotal) + 1; // Wrap around to the first vertex
+        indices.push_back(nextIndex);
     }
 }

@@ -11,8 +11,6 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 
 int main()
 {
-    glfwInit();
-
     /* Initialize the library */
     if (!glfwInit())
         return -1;
@@ -27,142 +25,136 @@ int main()
 
     /* Make the window's context current */
     glfwMakeContextCurrent(window);
+
+    /* Initialize GLAD */
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
     {
         glfwTerminate();
         return -1;
     }
 
+    /* Set viewport and callback */
     glViewport(0, 0, 600, 600);
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
 
-    App* app = new App();
-    Shader* shader = new Shader();
-    Object3D* obj = new Object3D();
+    /* Use stack allocation for objects to avoid memory leaks */
+    App app;
+    Shader shader;
+    Object3D obj;
 
-    // Setup ImGui 
+    /* Setup ImGui context */
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO(); (void)io;
 
-    // set imgui style
+    /* Set ImGui style */
     ImGui::StyleColorsDark();
 
+    /* Initialize ImGui backends */
     ImGui_ImplGlfw_InitForOpenGL(window, true);
-    ImGui_ImplOpenGL3_Init(shader->version);
+    ImGui_ImplOpenGL3_Init(shader.version);
 
-    // render loop
+    /* Generate and bind VAO, VBO, EBO outside the render loop */
+    unsigned int VAO, VBO, EBO;
+
+    glGenVertexArrays(1, &VAO);
+    glGenBuffers(1, &VBO);
+    glGenBuffers(1, &EBO);
+
+    /* Setup vertex attributes */
+    glBindVertexArray(VAO);
+
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+
+    /* Define vertex layout */
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+
+    /* Unbind VAO to prevent accidental modification */
+    glBindVertexArray(0);
+
+    /* Render loop */
     while (!glfwWindowShouldClose(window))
     {
-        // input    
+        /* Input handling */
         ProcessInput(window);
 
-        obj->GetCorner();
+        /* Update object data */
+        obj.GetCorner();
 
-        // ----------------------- RENDERING COMMAND HERE ----------------------------- //
-        unsigned int VAO;
-        glGenVertexArrays(1, &VAO);
-        glBindVertexArray(VAO);
-
-        unsigned int VBO;
-        glGenBuffers(1, &VBO);
+        /* Update buffer data */
         glBindBuffer(GL_ARRAY_BUFFER, VBO);
-        glBufferData(GL_ARRAY_BUFFER, obj->vertices.size() * sizeof(float), &obj->vertices[0], GL_STATIC_DRAW);
+        glBufferData(GL_ARRAY_BUFFER, obj.vertices.size() * sizeof(float), obj.vertices.data(), GL_DYNAMIC_DRAW);
 
-        unsigned int EBO;
-        glGenBuffers(1, &EBO);
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, obj->indices.size() * sizeof(unsigned int), &obj->indices[0], GL_STATIC_DRAW);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, obj.indices.size() * sizeof(unsigned int), obj.indices.data(), GL_DYNAMIC_DRAW);
 
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
-        glEnableVertexAttribArray(0);
-
+        /* Rendering commands */
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
-        
-        glUseProgram(shader->shaderProgram);
+
+        glUseProgram(shader.shaderProgram);
         glBindVertexArray(VAO);
-        glDrawElements(GL_TRIANGLES, obj->indices.size() * sizeof(unsigned int), GL_UNSIGNED_INT, 0);
+        glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(obj.indices.size()), GL_UNSIGNED_INT, 0);
         glBindVertexArray(0);
 
-        glDeleteVertexArrays(1, &VAO);
-        glDeleteBuffers(1, &VBO);
-        glDeleteBuffers(1, &EBO);
-
-        // --------------------------- IMGUI ----------------------------------------- //
+        /* Start ImGui frame */
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
 
-        ImGui::NewFrame(); {
+        /* ImGui interface */
+        ImGui::Begin("Circle Settings");
+        ImGui::SliderInt("Total Angle", &obj.circleCorner, 4, 30);
+        ImGui::End();
 
-            // render your GUI
-            ImGui::Begin("Circle Settings");
-            ImGui::SliderInt("Total Angle", &obj->circleCorner, 4, 30);
-            ImGui::End();
-
-            ImGui::Begin("Vertices");
-
-            std::string str;
-
-            for (int i = 0; i < obj->vertices.size(); i += 3) {
-                std::ostringstream ost;
-                std::copy(obj->vertices.begin() + i, obj->vertices.begin() + i + 3, std::ostream_iterator<float>(ost, ",\t"));
-
-                str += ost.str();
-                str += '\n';
-            }
-
-            const char* c = str.c_str();
-
-            ImGui::Text(c);
-            ImGui::End();
-
-            ImGui::Begin("Indices");
-
-            str = "";
-
-            for (int i = 0; i < obj->indices.size(); i += 3) {
-                std::ostringstream ost;
-                std::copy(obj->indices.begin() + i, obj->indices.begin() + i + 3, std::ostream_iterator<int>(ost, ",\t"));
-
-                str += ost.str();
-                str += '\n';
-            }
-
-            c = str.c_str();
-
-            ImGui::Text(c);
-            ImGui::End();
+        ImGui::Begin("Vertices");
+        for (size_t i = 0; i < obj.vertices.size(); i += 3) {
+            ImGui::Text("%.2f, %.2f, %.2f", obj.vertices[i], obj.vertices[i + 1], obj.vertices[i + 2]);
         }
+        ImGui::End();
 
-        // Render dear imgui into screen
+        ImGui::Begin("Indices");
+        for (size_t i = 0; i < obj.indices.size(); i += 3) {
+            ImGui::Text("%u, %u, %u", obj.indices[i], obj.indices[i + 1], obj.indices[i + 2]);
+        }
+        ImGui::End();
+
+        /* Render ImGui */
         ImGui::Render();
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
-        // check and call events and swap the buffers
+        /* Swap buffers and poll events */
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
 
+    /* Cleanup ImGui */
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
 
-    // optional: de-allocate all resources once they've outlived their purpose:
-    // ------------------------------------------------------------------------
-    glDeleteProgram(shader->shaderProgram);
+    /* De-allocate resources */
+    glDeleteVertexArrays(1, &VAO);
+    glDeleteBuffers(1, &VBO);
+    glDeleteBuffers(1, &EBO);
+    glDeleteProgram(shader.shaderProgram);
 
+    /* Terminate GLFW */
     glfwTerminate();
 
     return 0;
 }
 
 void ProcessInput(GLFWwindow* window) {
+    /* Close window on ESC press */
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
 }
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
+    /* Adjust the viewport when the window size changes */
     glViewport(0, 0, width, height);
 }
